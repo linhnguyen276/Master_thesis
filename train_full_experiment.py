@@ -39,7 +39,7 @@ parser.add_argument(
     "--key", type=str, default="graph_anomaly_list", help="key to the data"
 )
 parser.add_argument("--id", type=int, default=0, help="id to the data")
-parser.add_argument("--n-epoch", type=int, default=41, help="number of epoch")
+parser.add_argument("--n-epoch", type=int, default=200, help="number of epoch")
 parser.add_argument(
     "--scheduler-milestones",
     nargs="+",
@@ -49,15 +49,15 @@ parser.add_argument(
 )
 parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
 parser.add_argument("--score-agg", type=str, default="mean", help="aggregation for node anomaly score")
-parser.add_argument("--eta", type=float, default=0.1, help="structure loss weight")
+parser.add_argument("--eta", type=float, default=1, help="structure loss weight")
 
 args1 = vars(parser.parse_args())
 
 args2 = {
-    "hidden_channels": 16,
+    "hidden_channels": 32,
     "latent_channels_u": 153,
     "latent_channels_v": 153,
-    "edge_pred_latent": 2,
+    "edge_pred_latent": 32,
     "n_layers_encoder": 2,
     "n_layers_decoder": 2,
     "n_layers_mlp": 2,
@@ -109,7 +109,7 @@ print(
 )
 
 # %% test data
-data_test = load_graph("Distillation_train", "graph_anomaly_list_train")
+data_test = load_graph("ellipticpp_anomaly_test", "graph_anomaly_list_test")
 data_test_extended = load_graph("Distillation_extended_train", "graph_anomaly_list_train")
 
 
@@ -140,8 +140,8 @@ model = GraphBEAN(
     n_layers_encoder=args["n_layers_encoder"],
     n_layers_decoder=args["n_layers_decoder"],
     # n_layers_mlp=args["n_layers_mlp"],
-    n_layers_mlp_node=1,
-    n_layers_mlp_edge=1,
+    n_layers_mlp_node=4,
+    n_layers_mlp_edge=4,
     dropout_prob=args["dropout_prob"],
     )
 
@@ -168,7 +168,7 @@ xe_test, adj_test = data_test.xe.to(device), data_test.adj.to(device)
 #yu, yv, ye = data.yu.to(device), data.yv.to(device), data.ye.to(device)
 yu_test, yv_test, ye_test = data_test.u_pred.to(device), data_test.v_pred.to(device), data_test.e_pred.to(device)
 
-eid_test = data_test.e_index.to(device)
+# eid_test = data_test.e_index.to(device)
 feat_test = torch.cat((xu_test, xv_test), dim=0)
 node_label_test = torch.cat((yu_test, yv_test), dim=0)
 
@@ -261,19 +261,19 @@ def val(epoch):
 
     elapsed = time.time() - start
 
-    print(
-        f"Validation, loss: {loss:.4f}, "
-            + f"xe: {loss_component['xe']:.4f}, "
-            + f"[Eval acc_u: {npred_metric['acc_u']:.3f}, f1_u: {npred_metric['f1_u']:.3f} -> "
-            + f"prec_u: {npred_metric['prec_u']:.3f}, rec_u: {npred_metric['rec_u']:.3f}] "
-            + f"[Eval acc_v: {npred_metric['acc_v']:.5f}, f1_v: {npred_metric['f1_v']:.5f} -> "
-            + f"prec_v: {npred_metric['prec_v']:.5f}, rec_v: {npred_metric['rec_v']:.5f}] "
-            + f"u auc-roc: {validation_metrics['u_roc_auc']:.4f}, v auc-roc: {validation_metrics['v_roc_auc']:.4f}, e auc-roc: {validation_metrics['e_roc_auc']:.4f}, "
-            + f"u auc-pr {validation_metrics['u_pr_auc']:.4f}, v auc-pr {validation_metrics['v_pr_auc']:.4f}, e auc-pr {validation_metrics['e_pr_auc']:.4f} "
-            + f"[Eval acc_e: {epred_metric['acc_e']:.5f}, f1_e: {epred_metric['f1_e']:.5f} -> "
-            + f"prec_e: {epred_metric['prec_e']:.5f}, rec_e: {epred_metric['rec_e']:.5f}] "
-            + f"> {elapsed:.2f}s"
-    )
+    # print(
+    #     f"Validation, loss: {loss:.4f}, "
+    #         + f"xe: {loss_component['xe']:.4f}, "
+    #         + f"[Eval acc_u: {npred_metric['acc_u']:.3f}, f1_u: {npred_metric['f1_u']:.3f} -> "
+    #         + f"prec_u: {npred_metric['prec_u']:.3f}, rec_u: {npred_metric['rec_u']:.3f}] "
+    #         + f"[Eval acc_v: {npred_metric['acc_v']:.5f}, f1_v: {npred_metric['f1_v']:.5f} -> "
+    #         + f"prec_v: {npred_metric['prec_v']:.5f}, rec_v: {npred_metric['rec_v']:.5f}] "
+    #         + f"u auc-roc: {validation_metrics['u_roc_auc']:.4f}, v auc-roc: {validation_metrics['v_roc_auc']:.4f}, e auc-roc: {validation_metrics['e_roc_auc']:.4f}, "
+    #         + f"u auc-pr {validation_metrics['u_pr_auc']:.4f}, v auc-pr {validation_metrics['v_pr_auc']:.4f}, e auc-pr {validation_metrics['e_pr_auc']:.4f} "
+    #         + f"[Eval acc_e: {epred_metric['acc_e']:.5f}, f1_e: {epred_metric['f1_e']:.5f} -> "
+    #         + f"prec_e: {epred_metric['prec_e']:.5f}, rec_e: {epred_metric['rec_e']:.5f}] "
+    #         + f"> {elapsed:.2f}s"
+    # )
 
     return loss, loss_component, npred_metric, epred_metric
 
@@ -317,6 +317,18 @@ def eval(epoch):
         prob0_test = 1 - prob1_test
         prob_test = torch.stack((prob0_test, prob1_test), dim=1)
 
+    print(
+        f"Validation, loss: {loss:.4f}, "
+            + f"xe: {loss_component['xe']:.4f}, "
+            + f"[Eval acc_u: {npred_metric['acc_u']:.3f}, f1_u: {npred_metric['f1_u']:.3f} -> "
+            + f"prec_u: {npred_metric['prec_u']:.3f}, rec_u: {npred_metric['rec_u']:.3f}] "
+            + f"[Eval acc_v: {npred_metric['acc_v']:.5f}, f1_v: {npred_metric['f1_v']:.5f} -> "
+            + f"prec_v: {npred_metric['prec_v']:.5f}, rec_v: {npred_metric['rec_v']:.5f}] "
+            # + f"u auc-roc: {validation_metrics['u_roc_auc']:.4f}, v auc-roc: {validation_metrics['v_roc_auc']:.4f}, e auc-roc: {validation_metrics['e_roc_auc']:.4f}, "
+            # + f"u auc-pr {validation_metrics['u_pr_auc']:.4f}, v auc-pr {validation_metrics['v_pr_auc']:.4f}, e auc-pr {validation_metrics['e_pr_auc']:.4f} "
+            + f"[Eval acc_e: {epred_metric['acc_e']:.5f}, f1_e: {epred_metric['f1_e']:.5f} -> "
+            + f"prec_e: {epred_metric['prec_e']:.5f}, rec_e: {epred_metric['rec_e']:.5f}] "
+    )
 
     dense_tensor = adj_test_extended.to_dense()
     expanded_tensor = dense_tensor.unsqueeze(0)
@@ -372,7 +384,7 @@ epred_metric_hist_test = []
 npred_metric_hist_test = []
 
 # val(0)
-eval(0)
+loss_test, loss_test_ext, loss_component_test, npred_metric_test, edge_metric_test, cg_data_test = eval(0)
 
 def get_edges(adj_dict, edge_dict, node, hop, edges=set(), visited=set()):
     for neighbor in adj_dict[node]:
@@ -509,141 +521,147 @@ def extract(node):
     torch.save(save_dict, "distillation/%s/node_%d.ckpt" % (args["output"], node))
 
 
-# for epoch in range(args["n_epoch"]):
+for epoch in range(args["n_epoch"]+1):
+
+    start = time.time()
+    # loss, loss_component, epred_metric = train(epoch)
+    loss, loss_component, npred_metric_train, edge_metric_train = train(epoch)
+    elapsed = time.time() - start
+
+    # epred_metric_hist.append(epred_metric)
+
+    # print(
+    #     f"#{epoch:3d}, "
+    #     # + f"Loss: {loss:.4f} => xu: {loss_component['xu']:.4f}, xv: {loss_component['xv']:.4f}, "
+    #     # + f"xe: {loss_component['xe']:.4f}, "
+    #     # + f"e: {loss_component['e']:.4f} -> "
+    #     + f"[acc_u: {npred_metric_train['acc_u']:.3f}, f1_u: {npred_metric_train['f1_u']:.3f} -> "
+    #     + f"prec_u: {npred_metric_train['prec_u']:.3f}, rec_u: {npred_metric_train['rec_u']:.3f}] "
+    #     + f"[acc_v: {npred_metric_train['acc_v']:.5f}, f1_v: {npred_metric_train['f1_v']:.5f} -> "
+    #     + f"prec_v: {npred_metric_train['prec_v']:.5f}, rec_v: {npred_metric_train['rec_v']:.5f}] "
+    #     + f"[acc: {edge_metric_train['acc_e']:.3f}, f1: {edge_metric_train['f1_e']:.3f} -> "
+    #     + f"prec: {edge_metric_train['prec_e']:.3f}, rec: {edge_metric_train['rec_e']:.3f}] "
+    #     + f"> {elapsed:.2f}s"
+    # )
+
+
+    # npred_metric_hist_test.append([npred_metric_test['f1_u'], npred_metric_test['f1_v'], edge_metric_test['f1_e']])
+
+    if epoch % args["iter_check"] == 0:  # and epoch != 0:
+        # tb eval
+        npred_metric_hist_train.append([npred_metric_train['f1_u'], npred_metric_train['f1_v'], edge_metric_train['f1_e']])
+
+        loss_val, loss_component_val, npred_metric_val, edge_metric_val = val(epoch)
+        npred_metric_hist_val.append([npred_metric_val['f1_u'], npred_metric_val['f1_v'], edge_metric_val['f1_e']])
+
+        loss_test, loss_test_ext, loss_component_test, npred_metric_test, edge_metric_test, cg_data_test = eval(epoch)
+        npred_metric_hist_test.append([npred_metric_test['f1_u'], npred_metric_test['f1_v'], edge_metric_test['f1_e']])
+
+# model_path = r'C:\PC\Linh\MSc in Data Science\Program\Thesis\Codes\GraphBEAN_new\ckpt\Gem_elliptics.pth.tar'
+# model_optimal = torch.load(model_path)
 #
-#     start = time.time()
-#     # loss, loss_component, epred_metric = train(epoch)
-#     loss, loss_component, npred_metric_train, edge_metric_train = train(epoch)
-#     elapsed = time.time() - start
+# model.load_state_dict(model_optimal["model_state"])
+# cg_data_test = model_optimal['cg']
+# loss_test_ext = cg_data_test['loss_extended']
+# eval(200)
 #
-#     # epred_metric_hist.append(epred_metric)
+# feat = torch.from_numpy(cg_data_test["feat"]).float()
+# adj_array = torch.from_numpy(cg_data_test["adj"]).float()
+# adj_np = adj_test.to_dense().numpy()
+# num_nodes_set1, num_nodes_set2 = adj_np.shape
+# full_adj_matrix = np.zeros((num_nodes_set1 + num_nodes_set2, num_nodes_set1 + num_nodes_set2))
+# # Node 0 refers to index 0 in address/wallet dataset
 #
-#     print(
-#         f"#{epoch:3d}, "
-#         # + f"Loss: {loss:.4f} => xu: {loss_component['xu']:.4f}, xv: {loss_component['xv']:.4f}, "
-#         # + f"xe: {loss_component['xe']:.4f}, "
-#         # + f"e: {loss_component['e']:.4f} -> "
-#         + f"[acc_u: {npred_metric_train['acc_u']:.3f}, f1_u: {npred_metric_train['f1_u']:.3f} -> "
-#         + f"prec_u: {npred_metric_train['prec_u']:.3f}, rec_u: {npred_metric_train['rec_u']:.3f}] "
-#         + f"[acc_v: {npred_metric_train['acc_v']:.5f}, f1_v: {npred_metric_train['f1_v']:.5f} -> "
-#         + f"prec_v: {npred_metric_train['prec_v']:.5f}, rec_v: {npred_metric_train['rec_v']:.5f}] "
-#         + f"[acc: {edge_metric_train['acc_e']:.3f}, f1: {edge_metric_train['f1_e']:.3f} -> "
-#         + f"prec: {edge_metric_train['prec_e']:.3f}, rec: {edge_metric_train['rec_e']:.3f}] "
-#         + f"> {elapsed:.2f}s"
+# # Place A and its transpose in the full adjacency matrix
+# full_adj_matrix[:num_nodes_set1, num_nodes_set1:] = adj_np
+# full_adj_matrix[num_nodes_set1:, :num_nodes_set1] = adj_np.T
+#
+# label = torch.from_numpy(cg_data_test["label"]).long()
+# edge_pred = cg_data_test["edge_pred_samples"]
+#
+# G = nx.from_numpy_array(full_adj_matrix)
+# masked_loss = []
+# sorted_edges = sorted(G.edges)
+#
+# edge_dict = np.zeros(adj_array.shape[1:], dtype=np.int64)
+# adj_dict = {}
+#
+# for node in G:
+#     adj_dict[node] = list(G.neighbors(node))
+#
+# for edge_idx, (x, y) in enumerate(sorted_edges[:-4]):
+#     xe_short = torch.cat((xe_test[:edge_idx], xe_test[edge_idx + 1:]))
+#     edge_dict[x, y] = edge_idx
+#     edge_dict[y, x] = edge_idx
+#     masked_adj = torch.from_numpy(full_adj_matrix).float()
+#     masked_adj[x, y] = 0
+#     masked_adj[y, x] = 0
+#
+#     # Extract the top-right submatrix which corresponds to the original bipartite adjacency matrix
+#     A_extracted = masked_adj[:xu_test.shape[0], xu_test.shape[0]:(xu_test.shape[0] + xv_test.shape[0])]
+#
+#     # Create the SparseTensor
+#     # Identify the non-zero elements
+#     indices = A_extracted.nonzero(as_tuple=False).t()
+#     values = A_extracted[A_extracted != 0]
+#
+#     # Convert indices and values to the appropriate types for SparseTensor
+#     row = indices[0]
+#     col = indices[1]
+#     value = values.float()
+#
+#     # Define the size of the SparseTensor
+#     sparse_sizes = (xu_test.shape[0], xv_test.shape[0])
+#
+#     # Create the SparseTensor
+#     A_converted_back = SparseTensor(row=row, col=col, value=value, sparse_sizes=sparse_sizes)
+#     sampler_short = EdgePredictionSampler(A_converted_back, mult=args["neg_sampler_mult"])
+#     edge_pred_short = sampler_short.sample()
+#
+#     # Access the indices of the sparse tensor
+#
+#     m_out = model(xu_test, xv_test, xe_short, A_converted_back, edge_pred_short)
+#     m_loss, m_loss_ext, m_loss_component = reconstruction_loss(
+#         xu_test,
+#         xv_test,
+#         xe_short,
+#         A_converted_back,
+#         edge_pred_short,
+#         yu_test,
+#         yv_test,
+#         m_out,
+#         xe_loss_weight=args["xe_loss_weight"],
+#         classification_loss_weight=args["classification_loss_weight"],
+#         structure_loss_weight=args["structure_loss_weight"],
 #     )
+#     masked_loss += [m_loss_ext]
 #
-#     if epoch % args["iter_check"] == 0:  # and epoch != 0:
-#         # tb eval
-#         npred_metric_hist_train.append([npred_metric_train['f1_u'], npred_metric_train['f1_v'], edge_metric_train['f1_e']])
+# masked_loss = torch.stack(masked_loss)
+# loss_diff = masked_loss - loss_test_ext
+# loss_diff_t = loss_diff.t()
 #
-#         loss_test, loss_test_ext, loss_component_test, npred_metric_test, edge_metric_test, cg_data_test = eval(epoch)
-#         npred_metric_hist_test.append([npred_metric_test['f1_u'], npred_metric_test['f1_v'], edge_metric_test['f1_e']])
-
-model_path = r'C:\PC\Linh\MSc in Data Science\Program\Thesis\Codes\GraphBEAN_new\ckpt\Gem_elliptics.pth.tar'
-model_optimal = torch.load(model_path)
-
-model.load_state_dict(model_optimal["model_state"])
-cg_data_test = model_optimal['cg']
-loss_test_ext = cg_data_test['loss_extended']
-eval(40)
-
-feat = torch.from_numpy(cg_data_test["feat"]).float()
-adj_array = torch.from_numpy(cg_data_test["adj"]).float()
-adj_np = adj_test.to_dense().numpy()
-num_nodes_set1, num_nodes_set2 = adj_np.shape
-full_adj_matrix = np.zeros((num_nodes_set1 + num_nodes_set2, num_nodes_set1 + num_nodes_set2))
-# Node 0 refers to index 0 in address/wallet dataset
-
-# Place A and its transpose in the full adjacency matrix
-full_adj_matrix[:num_nodes_set1, num_nodes_set1:] = adj_np
-full_adj_matrix[num_nodes_set1:, :num_nodes_set1] = adj_np.T
-
-label = torch.from_numpy(cg_data_test["label"]).long()
-edge_pred = cg_data_test["edge_pred_samples"]
-
-G = nx.from_numpy_array(full_adj_matrix)
-masked_loss = []
-sorted_edges = sorted(G.edges)
-
-edge_dict = np.zeros(adj_array.shape[1:], dtype=np.int64)
-adj_dict = {}
-
-for node in G:
-    adj_dict[node] = list(G.neighbors(node))
-
-for edge_idx, (x, y) in enumerate(sorted_edges[:-4]):
-    xe_short = torch.cat((xe_test[:edge_idx], xe_test[edge_idx + 1:]))
-    edge_dict[x, y] = edge_idx
-    edge_dict[y, x] = edge_idx
-    masked_adj = torch.from_numpy(full_adj_matrix).float()
-    masked_adj[x, y] = 0
-    masked_adj[y, x] = 0
-
-    # Extract the top-right submatrix which corresponds to the original bipartite adjacency matrix
-    A_extracted = masked_adj[:xu_test.shape[0], xu_test.shape[0]:(xu_test.shape[0] + xv_test.shape[0])]
-
-    # Create the SparseTensor
-    # Identify the non-zero elements
-    indices = A_extracted.nonzero(as_tuple=False).t()
-    values = A_extracted[A_extracted != 0]
-
-    # Convert indices and values to the appropriate types for SparseTensor
-    row = indices[0]
-    col = indices[1]
-    value = values.float()
-
-    # Define the size of the SparseTensor
-    sparse_sizes = (xu_test.shape[0], xv_test.shape[0])
-
-    # Create the SparseTensor
-    A_converted_back = SparseTensor(row=row, col=col, value=value, sparse_sizes=sparse_sizes)
-    sampler_short = EdgePredictionSampler(A_converted_back, mult=args["neg_sampler_mult"])
-    edge_pred_short = sampler_short.sample()
-
-    # Access the indices of the sparse tensor
-
-    m_out = model(xu_test, xv_test, xe_short, A_converted_back, edge_pred_short)
-    m_loss, m_loss_ext, m_loss_component = reconstruction_loss(
-        xu_test,
-        xv_test,
-        xe_short,
-        A_converted_back,
-        edge_pred_short,
-        yu_test,
-        yv_test,
-        m_out,
-        xe_loss_weight=args["xe_loss_weight"],
-        classification_loss_weight=args["classification_loss_weight"],
-        structure_loss_weight=args["structure_loss_weight"],
-    )
-    masked_loss += [m_loss_ext]
-
-masked_loss = torch.stack(masked_loss)
-loss_diff = masked_loss - loss_test_ext
-loss_diff_t = loss_diff.t()
-
-graphs = []
-
-with torch.no_grad():
-    for node in G:
-        print("node in G: ", node)
-        extract(node)
-        # try:
-        #     extract(node)
-        # except RuntimeError:
-        #     print("A runtime error occurs!!!")
-        #     continue
-        #
-        # except IndexError:
-        #     print("An index error occurs!!!")
-        #
-        # except AssertionError:
-        #     print("An asseration error occurs!!!")
-        #     continue
+# graphs = []
+#
+# with torch.no_grad():
+#     for node in G:
+#         # print("node in G: ", node)
+#         # extract(node)
+#         try:
+#             extract(node)
+#         except RuntimeError:
+#             print("A runtime error occurs!!!")
+#             continue
+#
+#         except IndexError:
+#             print("An index error occurs!!!")
+#
+#         except AssertionError:
+#             print("An asseration error occurs!!!")
+#             continue
 
 # %% write the npred_metric of training set, validation, test set to .csv
 rows = zip(npred_metric_hist_train, npred_metric_hist_val, npred_metric_hist_test)
-filename = 'training_validation_testing_output_u_nodropout.csv'
+filename = 'training_validation_testing.csv'
 with open(filename, 'w', newline='') as csvfile:
     csvwriter = csv.writer(csvfile)
     csvwriter.writerows(rows)
