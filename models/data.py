@@ -17,6 +17,7 @@ class BipartiteData(Data):
         u_pred: OptTensor = None,
         v_pred: OptTensor = None,
         e_pred: OptTensor = None,
+        e_index: OptTensor = None,
         **kwargs
     ):
         super().__init__()
@@ -27,6 +28,7 @@ class BipartiteData(Data):
         self.u_pred = u_pred
         self.v_pred = v_pred
         self.e_pred = e_pred
+        self.e_index = e_index
 
         for key, value in kwargs.items():
             setattr(self, key, value)
