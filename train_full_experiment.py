@@ -1,40 +1,26 @@
-# Copyright 2021 Grabtaxi Holdings Pte Ltd (GRAB), All rights reserved.
-# Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
 import csv
-import sys
-import pandas as pd
-
-from data_finefoods import load_graph
 from models.score import compute_evaluation_metrics
-
 import time
-from tqdm import tqdm
 import argparse
 import os
 import numpy as np
-
-#from torch.utils.tensorboard import SummaryWriter
 import datetime
-
 import torch
 
-from models.data import BipartiteData
 from models.net import GraphBEAN
 from models.sampler import EdgePredictionSampler
 from models.loss import reconstruction_loss
 from models.score import compute_anomaly_score, edge_prediction_metric, node_prediction_metric
-
 from utils.seed import seed_all
 
 # %% args
-
 parser = argparse.ArgumentParser(description="GraphBEAN")
 parser.add_argument("--name", type=str, default="ellipticpp_anomaly", help="name")
 parser.add_argument(
     "--key", type=str, default="graph_anomaly_list", help="key to the data"
 )
 parser.add_argument("--id", type=int, default=0, help="id to the data")
-parser.add_argument("--n-epoch", type=int, default=251, help="number of epoch")
+parser.add_argument("--n-epoch", type=int, default=200, help="number of epoch")
 parser.add_argument(
     "--scheduler-milestones",
     nargs="+",
@@ -44,15 +30,15 @@ parser.add_argument(
 )
 parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
 parser.add_argument("--score-agg", type=str, default="mean", help="aggregation for node anomaly score")
-parser.add_argument("--eta", type=float, default=0.1, help="structure loss weight")
+parser.add_argument("--eta", type=float, default=0.2, help="structure loss weight")
 
 args1 = vars(parser.parse_args())
 
 args2 = {
-    "hidden_channels": 16,
+    "hidden_channels": 32,
     "latent_channels_u": 153,
     "latent_channels_v": 153,
-    "edge_pred_latent": 2,
+    "edge_pred_latent": 32,
     "n_layers_encoder": 2,
     "n_layers_decoder": 2,
     "n_layers_mlp": 2,
@@ -71,45 +57,12 @@ args2 = {
 }
 
 args = {**args1, **args2}
-
 seed_all(args["seed"])
-
 result_dir = "results/"
 
-# # %% split train - val - test set
-# file_path = 'C:/PC/Linh/MSc in Data Science/Program/Thesis/Codes/GraphBEAN_new/data/ellipticspp_95features.csv'
-# data = pd.read_csv(file_path)
-# data = data.dropna()
-# # Function to split the data into train, validation, and test sets
-# def split_data(df, train_frac=0.7, val_frac=0.15, test_frac=0.15):
-#     train_list = []
-#     val_list = []
-#     test_list = []
-#
-#     for timestamp in range(1, 50):
-#         temp = df[df['timestamp'] == timestamp]
-#         train_temp = temp.sample(frac=train_frac, random_state=42)
-#         val_temp = temp.drop(train_temp.index).sample(frac=val_frac / (val_frac + test_frac), random_state=42)
-#         test_temp = temp.drop(train_temp.index).drop(val_temp.index)
-#
-#         train_list.append(train_temp)
-#         val_list.append(val_temp)
-#         test_list.append(test_temp)
-#
-#     train_df = pd.concat(train_list).reset_index(drop=True)
-#     val_df = pd.concat(val_list).reset_index(drop=True)
-#     test_df = pd.concat(test_list).reset_index(drop=True)
-#
-#     return train_df, val_df, test_df
-#
-#
-# # Split the data
-# train_df, val_df, test_df = split_data(data)
-#
-# # Save the data to new CSV files
-# train_df.to_csv('C:/PC/Linh/MSc in Data Science/Program/Thesis/Codes/GraphBEAN_new/data/ellipticspp_train.csv', index=False)
-# test_df.to_csv('C:/PC/Linh/MSc in Data Science/Program/Thesis/Codes/GraphBEAN_new/data/ellipticspp_test.csv', index=False)
-# val_df.to_csv('C:/PC/Linh/MSc in Data Science/Program/Thesis/Codes/GraphBEAN_new/data/ellipticspp_val.csv', index=False)
+def load_graph(name: str, key: str):
+    data = torch.load(f"storage/{name}.pt")
+    return data[key][0]
 
 # %% train data
 data = load_graph("ellipticpp_anomaly_train", "graph_anomaly_list_train", args["id"])
@@ -129,7 +82,6 @@ u_ch_val = data_val.xu.shape[1]
 v_ch_val = data_val.xv.shape[1]
 e_ch_val = data_val.xe.shape[1]
 
-
 print(
     f"Validation data dimension: U node = {data_val.xu.shape}; V node = {data_val.xv.shape}; E edge = {data_val.xe.shape}; \n"
 )
@@ -141,7 +93,6 @@ u_ch_test = data_test.xu.shape[1]
 v_ch_test = data_test.xv.shape[1]
 e_ch_test = data_test.xe.shape[1]
 
-
 print(
     f"Test data dimension: U node = {data_test.xu.shape}; V node = {data_test.xv.shape}; E edge = {data_test.xe.shape}; \n"
 )
@@ -151,21 +102,14 @@ print(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = GraphBEAN(
     in_channels=(u_ch, v_ch, e_ch),
-    # in_channels_u=(u_ch, v_ch, e_ch),
-    # in_channels_v=(u_ch, v_ch, e_ch),
     hidden_channels=args["hidden_channels"],
     latent_channels=(args["latent_channels_u"],args["latent_channels_v"]),
-    # hidden_channels_u=args["hidden_channels_u"],
-    # hidden_channels_v=args["hidden_channels_v"],
-    # latent_channels_u=args["latent_channels_u"],
-    # latent_channels_v=args["latent_channels_v"],
     edge_pred_latent=args["edge_pred_latent"],
     node_pred_latent=153,
     n_layers_encoder=args["n_layers_encoder"],
     n_layers_decoder=args["n_layers_decoder"],
-    # n_layers_mlp=args["n_layers_mlp"],
-    n_layers_mlp_node=1,
-    n_layers_mlp_edge=1,
+    n_layers_mlp_node=4,
+    n_layers_mlp_edge=4,
     dropout_prob=args["dropout_prob"],
     )
 
@@ -177,19 +121,15 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
 
 xu, xv = data.xu.to(device), data.xv.to(device)
 xe, adj = data.xe.to(device), data.adj.to(device)
-#yu, yv, ye = data.yu.to(device), data.yv.to(device), data.ye.to(device)
 yu, yv, ye = data.u_pred.to(device), data.v_pred.to(device), data.e_pred.to(device)
 node_pred = torch.cat((yu, yv), dim=0)
 
 xu_val, xv_val = data_val.xu.to(device), data_val.xv.to(device)
 xe_val, adj_val = data_val.xe.to(device), data_val.adj.to(device)
-#yu, yv, ye = data.yu.to(device), data.yv.to(device), data.ye.to(device)
 yu_val, yv_val, ye_val = data_val.u_pred.to(device), data_val.v_pred.to(device), data_val.e_pred.to(device)
-
 
 xu_test, xv_test = data_test.xu.to(device), data_test.xv.to(device)
 xe_test, adj_test = data_test.xe.to(device), data_test.adj.to(device)
-#yu, yv, ye = data.yu.to(device), data.yv.to(device), data.ye.to(device)
 yu_test, yv_test, ye_test = data_test.u_pred.to(device), data_test.v_pred.to(device), data_test.e_pred.to(device)
 
 # sampler
@@ -204,12 +144,10 @@ print()
 def train(epoch):
 
     model.train()
-
     edge_pred_samples = sampler.sample()
 
     optimizer.zero_grad()
     out = model(xu, xv, xe, adj, edge_pred_samples)
-
     loss, loss_component = reconstruction_loss(
         xu,
         xv,
@@ -436,20 +374,14 @@ check_counter = 0
 val(0)
 eval(0)
 
-for epoch in range(args["n_epoch"]):
+for epoch in range(args["n_epoch"]+1):
 
     start = time.time()
-    # loss, loss_component, epred_metric = train(epoch)
     loss, loss_component, npred_metric_train, edge_metric_train = train(epoch)
     elapsed = time.time() - start
 
-    # epred_metric_hist.append(epred_metric)
-
     print(
         f"#{epoch:3d}, "
-        # + f"Loss: {loss:.4f} => xu: {loss_component['xu']:.4f}, xv: {loss_component['xv']:.4f}, "
-        # + f"xe: {loss_component['xe']:.4f}, "
-        # + f"e: {loss_component['e']:.4f} -> "
         + f"[acc_u: {npred_metric_train['acc_u']:.3f}, f1_u: {npred_metric_train['f1_u']:.3f} -> "
         + f"prec_u: {npred_metric_train['prec_u']:.3f}, rec_u: {npred_metric_train['rec_u']:.3f}] "
         + f"[acc_v: {npred_metric_train['acc_v']:.5f}, f1_v: {npred_metric_train['f1_v']:.5f} -> "
