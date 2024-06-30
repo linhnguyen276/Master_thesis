@@ -107,6 +107,22 @@ def node_prediction_metric(
     predicted_label_u = torch.argmax(u_prob, dim=1)
     predicted_label_v = torch.argmax(v_prob, dim=1)
 
+    is_valid = ~torch.isnan(u_label)  # Boolean mask where True indicates valid values
+    u_label_fixed = u_label.clone().detach()  # Make a copy to modify
+    u_label_fixed[torch.isnan(u_label)] = 0  # Replace N/A with 0 in labels
+
+    # Modify corresponding indices in nprob_u
+    predicted_label_u = predicted_label_u.clone().detach()  # Clone to modify safely
+    predicted_label_u[~is_valid] = 0  # Set probabilities to 0 where label was N/A
+
+    is_valid = ~torch.isnan(v_label)  # Boolean mask where True indicates valid values
+    v_label_fixed = v_label.clone().detach()  # Make a copy to modify
+    v_label_fixed[torch.isnan(v_label)] = 0  # Replace N/A with 0 in labels
+
+    # Modify corresponding indices in nprob_u
+    predicted_label_v = predicted_label_v.clone().detach()  # Clone to modify safely
+    predicted_label_v[~is_valid] = 0  # Set probabilities to 0 where label was N/A
+
     acc_u = accuracy_score(u_label.numpy(), predicted_label_u.numpy())
     prec_u = precision_score(u_label.numpy(), predicted_label_u.numpy())
     rec_u = recall_score(u_label.numpy(), predicted_label_u.numpy())
