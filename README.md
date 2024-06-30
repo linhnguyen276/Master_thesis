@@ -15,9 +15,9 @@ We construct the graph datasets by loading the csv and construct PyG graph data.
 
 To run the experiments, please execute the corresponding file: 
 
-1. `GrapBEAN`: 
+1. `Semi-supervised GrapBEAN model`: 
     ```
-    python train_full_experiment.py --name ellipticpp_anomaly --id 0
+    python train_full_experiment.py
     ```
  
 The argument `--name` indicates which dataset we want the model run on, with the format of `{dataset_name}_anomaly`. Additional arguments are also available depending on the models.
@@ -35,4 +35,8 @@ The argument `--name` indicates which dataset we want the model run on, with the
     --score-agg               : aggregation method for node anomaly score
                                 (max or mean) [default: max]      
     --scheduler-milestones    : milestones for learning scheduler [default: []]            
+    ```
+2. `Distillation algorithm for the GNN's output`: 
+    ```
+    python train_and_distill.py
     ```
